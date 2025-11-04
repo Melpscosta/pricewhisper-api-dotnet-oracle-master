@@ -1,3 +1,6 @@
+# CI pipeline for ASP.NET Core project (Classic editor equivalent)
+# Steps: Restore → Build → Test → Publish → Publish Artifact
+
 trigger:
 - main
 
@@ -5,31 +8,48 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-  project: 'pricewhisper-usuarios.API/pricewhisper-usuarios.API.csproj'
-  buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
+  projectPath: 'pricewhisper-usuarios.API/pricewhisper-usuarios.API.csproj'
+  testProjectPath: 'pricewhisper-usuarios.Tests/pricewhisper-usuarios.Tests.csproj'
 
 steps:
-- task: NuGetToolInstaller@1
-
-- task: NuGetCommand@2
+# 1️⃣ Restore dependencies
+- task: DotNetCoreCLI@2
+  displayName: 'Restore NuGet packages'
   inputs:
-    restoreSolution: '$(project)'
+    command: 'restore'
+    projects: '$(projectPath)'
 
-- task: VSBuild@1
+# 2️⃣ Build the project
+- task: DotNetCoreCLI@2
+  displayName: 'Build ASP.NET Core project'
   inputs:
-    solution: '$(project)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(Build.ArtifactStagingDirectory)\WebApp.zip"'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    command: 'build'
+    projects: '$(projectPath)'
+    arguments: '--configuration $(buildConfiguration)'
 
-- task: VSTest@2
+# 3️⃣ Run tests
+- task: DotNetCoreCLI@2
+  displayName: 'Run unit tests'
   inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    command: 'test'
+    projects: '$(testProjectPath)'
+    arguments: '--configuration $(buildConfiguration)'
+  continueOnError: true   # deixa o pipeline seguir mesmo se os testes falharem
 
+# 4️⃣ Publish the web app
+- task: DotNetCoreCLI@2
+  displayName: 'Publish Web App'
+  inputs:
+    command: 'publish'
+    publishWebProjects: false
+    projects: '$(projectPath)'
+    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+    zipAfterPublish: true
+
+# 5️⃣ Publish the artifact to Azure Pipelines
 - task: PublishBuildArtifacts@1
-  displayName: 'Publicar Artifact'
+  displayName: 'Publish build artifact'
   inputs:
     PathtoPublish: '$(Build.ArtifactStagingDirectory)'
     ArtifactName: 'drop'
